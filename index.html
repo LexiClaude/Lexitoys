@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -129,7 +90,7 @@
         .financial-table table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1400px; /* Increased for better visibility */
+            min-width: 1400px;
             table-layout: fixed;
         }
         .financial-table th {
@@ -139,33 +100,35 @@
             color: white;
             padding: 0.75rem;
             text-align: left;
-            font-size: 1.125rem; /* text-lg */
+            font-size: 1.125rem;
             z-index: 2;
         }
         .financial-table th.pinned-semester {
             left: 0;
-            width: 120px; /* Fixed width */
+            width: 120px;
             z-index: 3;
         }
         .financial-table th.pinned-groups {
-            left: 120px; /* Offset from Semester */
-            width: 100px; /* Fixed width */
+            left: 120px;
+            width: 100px;
             z-index: 3;
         }
         .financial-table td {
             padding: 0.5rem;
             text-align: right;
-            font-size: 1rem; /* text-base */
+            font-size: 1rem;
             border-bottom: 1px solid #e5e7eb;
-            width: 100px; /* Consistent width */
+            width: 100px;
         }
         .financial-table td.pinned-semester {
+            position: sticky;
             left: 0;
             background: inherit;
             z-index: 1;
         }
         .financial-table td.pinned-groups {
-            left: 120px; /* Match th offset */
+            position: sticky;
+            left: 120px;
             background: inherit;
             z-index: 1;
         }
@@ -229,7 +192,7 @@
             </div>
         </div>
         <!-- Classroom Visits Section -->
-        <div id="classroomContent" class="mb-6" data-chinese='<div class="card"><div class="prose prose-base text-gray-700"><h2 class="text-xl font-semibold text-gray-800 mb-4">Classroom Visits</h2><div class="slideshow"><div class="slide"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAz8fG7gAAAABJRU5ErkJggg==" alt="Joyful Curriculum Kickoff with Lexi Toys" loading="lazy"><div class="text-overlay"><h3 class="text-base font-semibold"><strong>Joyful Curriculum Kickoff</strong></h3><p>Trainers burst in with a delightful kit, singing a cheerful song!</p><span class="expandable">More details...</span></div></div><div class="slide"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAz8fG7gAAAABJRU5ErkJggg==" alt="Exciting Mid-Semester Boost with Lexi Toys" loading="lazy"><div class="text-overlay"><h3 class="text-base font-semibold"><strong>Exciting Mid-Semester Boost</strong></h3><p>Trainers lead a lively game with vibrant kits!</p><span class="expandable">More details...</span></div></div><div class="slide"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAz8fG7gAAAABJRU5ErkJggg==" alt="Delightful End-of-Semester Celebration with Lexi Toys" loading="lazy"><div class="text-overlay"><h3 class="text-base font-semibold"><strong>Delightful End-of-Semester Celebration</strong></h3><p>Trainers host a festive game with beaming kids!</p><span class="expandable">More details...</span></div></div></div><div class="slideshow-buttons"><button id="prevSlide">Previous</button><button id="nextSlide">Next</button></div><p class="mt-2 text-xs">These 13 cheerful visits per semester power Lexi Toys’ mission—explore the Financial Planner tab!</p></div></div>'>
+        <div id="classroomContent" class="mb-6" data-chinese=''>
             <div class="card">
                 <div class="prose prose-base text-gray-700">
                     <h2 class="text-xl font-semibold text-gray-800 mb-4">Classroom Visits</h2>
@@ -437,7 +400,7 @@
             isChinese = !isChinese;
             const langToggle = document.getElementById('langToggle');
             langToggle.textContent = isChinese ? 'Switch to English' : 'Switch to Chinese';
-            ['introContent', 'classroomContent', 'pitchContent', 'loanContent'].forEach(id => {
+            ['introContent', 'pitchContent', 'loanContent'].forEach(id => { // Exclude classroomContent
                 const content = document.getElementById(id);
                 if (content) {
                     const prose = content.querySelector('.prose');
@@ -453,9 +416,7 @@
             });
             if (document.getElementById('classroomContent') && !document.getElementById('classroomContent').classList.contains('hidden')) {
                 let slideIndex = 0;
-                showSlides(slideIndex); // Reinitialize slideshow after language switch
-                document.getElementById('prevSlide').addEventListener('click', () => showSlides(slideIndex -= 1));
-                document.getElementById('nextSlide').addEventListener('click', () => showSlides(slideIndex += 1));
+                showSlides(slideIndex);
             }
         });
 
