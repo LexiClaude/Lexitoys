@@ -1,0 +1,722 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEXI Toys Financial Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .tab-active {
+            border-bottom: 2px solid #38a89d;
+            color: #38a89d;
+        }
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .slideshow {
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            position: relative;
+            padding-bottom: 2.5rem; /* Space for buttons */
+        }
+        .slide {
+            display: inline-block;
+            width: 100%;
+            max-width: 600px;
+            margin-right: 1rem;
+            vertical-align: top;
+            position: relative;
+        }
+        .slide img {
+            width: 100%;
+            max-height: 16rem;
+            object-fit: cover;
+            border-radius: 0.5rem;
+        }
+        .slide .text-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 0.5rem;
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+        }
+        .slide .expandable {
+            cursor: pointer;
+            color: #f4a261;
+        }
+        .slideshow-buttons {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 0;
+            right: 0;
+            text-align: center;
+            background: rgba(56, 168, 157, 0.75);
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            z-index: 10;
+        }
+        .slideshow-buttons button {
+            background: #e76f51;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            margin: 0 0.5rem;
+            cursor: pointer;
+            border-radius: 0.25rem;
+            transition: background-color 0.3s;
+        }
+        .slideshow-buttons button:hover {
+            background-color: #f4a261;
+        }
+        .financial-table {
+            overflow-x: auto;
+            margin-top: 1rem;
+            position: relative;
+        }
+        .financial-table table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1400px;
+            table-layout: fixed;
+        }
+        .financial-table th {
+            position: sticky;
+            top: 0;
+            background: #38a89d;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-size: 1.125rem;
+            z-index: 2;
+        }
+        .financial-table th.pinned-semester {
+            left: 0;
+            width: 120px;
+            z-index: 3;
+        }
+        .financial-table th.pinned-groups {
+            left: 120px;
+            width: 100px;
+            z-index: 3;
+        }
+        .financial-table td {
+            padding: 0.5rem;
+            text-align: right;
+            font-size: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            width: 100px;
+        }
+        .financial-table td.pinned-semester {
+            position: sticky;
+            left: 0;
+            background: #f9fafb; /* Solid background to match even rows */
+            z-index: 1;
+        }
+        .financial-table td.pinned-groups {
+            position: sticky;
+            left: 120px;
+            background: #f9fafb; /* Solid background to match even rows */
+            z-index: 1;
+        }
+        .financial-table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .financial-table tr:nth-child(odd) {
+            background-color: white; /* Ensure odd rows have a default background */
+        }
+        .financial-table tr:hover {
+            background-color: #f1f5f9;
+        }
+        .progress-bar {
+            height: 1rem;
+            background: #e0e7ff;
+            border-radius: 0.25rem;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+        .progress {
+            height: 100%;
+            background: #38a89d;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-5xl mx-auto">
+        <div class="text-right mb-4">
+            <button id="langToggle" class="bg-gray-200 text-gray-800 px-3 py-1 rounded hover:bg-gray-300 transition-all duration-300" aria-label="Switch to Chinese">Switch to Chinese</button>
+        </div>
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">LEXI Toys Financial Planner</h1>
+        <div class="sticky top-0 bg-white z-10 mb-6 p-2 border-b border-gray-200">
+            <div class="flex flex-wrap justify-around">
+                <button id="introTab" class="flex-1 py-2 text-center text-base font-semibold text-gray-600 hover:text-gray-800 hover:bg-teal-100 focus:outline-none transition-all duration-300">Introduction to LEXI Toys</button>
+                <button id="classroomTab" class="flex-1 py-2 text-center text-base font-semibold text-gray-600 hover:text-gray-800 hover:bg-teal-100 focus:outline-none transition-all duration-300">Classroom Visits</button>
+                <button id="plannerTab" class="flex-1 py-2 text-center text-base font-semibold text-gray-600 hover:text-gray-800 hover:bg-teal-100 focus:outline-none transition-all duration-300">Financial Planner</button>
+                <button id="pitchTab" class="flex-1 py-2 text-center text-base font-semibold text-gray-600 hover:text-gray-800 hover:bg-teal-100 focus:outline-none transition-all duration-300">Invitation to Partnership</button>
+                <button id="loanTab" class="flex-1 py-2 text-center text-base font-semibold text-gray-600 hover:text-gray-800 hover:bg-teal-100 focus:outline-none transition-all duration-300">Funding Support</button>
+            </div>
+        </div>
+        <!-- Introduction to LEXI Toys Section -->
+        <div id="introContent" class="mb-6" data-chinese='<div class="card"><div class="prose prose-base text-gray-700"><h2 class="text-xl font-semibold text-gray-800 mb-4">Introduction to LEXI Toys</h2><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Idea Behind the Model</h3><p class="mb-2">Lexi Toys delivers educational toy kits to schools, designed to align with a custom curriculum that I’ve created, promoting lessons for children aged 4 – 7.</p><p class="mb-2">The model aims to spark interest in learning by introducing toys that match upcoming classroom topics, with subscriptions providing kits tailored to semester themes (e.g., science, puzzles).</p><p class="mb-2">The focus is on scalable growth, starting with small groups and expanding based on demand and financial viability.</p><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Why Selling Toys Directly Instead of Calling It Teaching</h3><p class="mb-2">Selling toys directly frames Lexi Toys as a product-based service, avoiding the need for educational licenses or teacher certifications, which are required for formal teaching programs.</p><p class="mb-2">This approach allows flexible pricing (e.g., 688 CNY per child per semester) and sidesteps government regulations on educational content, positioning it as a commercial enrichment tool.</p><p class="mb-2">The service provides toy kits and trainer visits as promotional support, not instruction, keeping it outside strict educational oversight.</p><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Workarounds for Government Rules</h3><p class="mb-2">Lexi Toys operates under a commercial business license, marketing toy subscriptions and trainer visits as enrichment services, not educational programs.</p><p class="mb-2">School partnerships are structured as vendor contracts, where schools opt into subscriptions, complying with procurement regulations rather than educational standards.</p><p class="mb-2">Trainers are engaged as independent contractors or staff under service agreements, ensuring they are not classified as educators, with activities limited to promotion to meet legal boundaries.</p><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">What a Trainer Does in the Classroom</h3><p class="mb-2">The trainer visits schools (13 times per semester, about 20 minutes each) to introduce Lexi Toys kits that match the curriculum, promoting lessons teachers will later teach.</p><p class="mb-2">They create an encouraging atmosphere with activities like singing a song or playing a game, distributing toys to motivate kids, who use them at home or school to reinforce learning.</p><p class="mb-2">Trainers do not teach or explain lessons, serving only as a friendly face to inspire interest, while teachers handle all instruction, and trainers report session feedback to Lexi Toys.</p></div></div>'>
+            <div class="card">
+                <div class="prose prose-base text-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Introduction to LEXI Toys</h2>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Idea Behind the Model</h3>
+                    <p class="mb-2">Lexi Toys delivers educational toy kits to schools, designed to align with a custom curriculum that I’ve created, promoting lessons for children aged 4 – 7.</p>
+                    <p class="mb-2">The model aims to spark interest in learning by introducing toys that match upcoming classroom topics, with subscriptions providing kits tailored to semester themes (e.g., science, puzzles).</p>
+                    <p class="mb-2">The focus is on scalable growth, starting with small groups and expanding based on demand and financial viability.</p>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Why Selling Toys Directly Instead of Calling It Teaching</h3>
+                    <p class="mb-2">Selling toys directly frames Lexi Toys as a product-based service, avoiding the need for educational licenses or teacher certifications, which are required for formal teaching programs.</p>
+                    <p class="mb-2">This approach allows flexible pricing (e.g., 688 CNY per child per semester) and sidesteps government regulations on educational content, positioning it as a commercial enrichment tool.</p>
+                    <p class="mb-2">The service provides toy kits and trainer visits as promotional support, not instruction, keeping it outside strict educational oversight.</p>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Workarounds for Government Rules</h3>
+                    <p class="mb-2">Lexi Toys operates under a commercial business license, marketing toy subscriptions and trainer visits as enrichment services, not educational programs.</p>
+                    <p class="mb-2">School partnerships are structured as vendor contracts, where schools opt into subscriptions, complying with procurement regulations rather than educational standards.</p>
+                    <p class="mb-2">Trainers are engaged as independent contractors or staff under service agreements, ensuring they are not classified as educators, with activities limited to promotion to meet legal boundaries.</p>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">What a Trainer Does in the Classroom</h3>
+                    <p class="mb-2">The trainer visits schools (13 times per semester, about 20 minutes each) to introduce Lexi Toys kits that match the curriculum, promoting lessons teachers will later teach.</p>
+                    <p class="mb-2">They create an encouraging atmosphere with activities like singing a song or playing a game, distributing toys to motivate kids, who use them at home or school to reinforce learning.</p>
+                    <p class="mb-2">Trainers do not teach or explain lessons, serving only as a friendly face to inspire interest, while teachers handle all instruction, and trainers report session feedback to Lexi Toys.</p>
+                </div>
+            </div>
+        </div>
+        <!-- Classroom Visits Section -->
+        <div id="classroomContent" class="mb-6" data-chinese=''>
+            <div class="card">
+                <div class="prose prose-base text-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Classroom Visits</h2>
+                    <div class="slideshow">
+                        <div class="slide">
+                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAz8fG7gAAAABJRU5ErkJggg==" alt="Joyful Curriculum Kickoff with Lexi Toys" loading="lazy">
+                            <div class="text-overlay">
+                                <h3 class="text-base font-semibold"><strong>Joyful Curriculum Kickoff</strong></h3>
+                                <p>Trainers burst in with a delightful kit, singing a cheerful song!</p>
+                                <span class="expandable">More details...</span>
+                            </div>
+                        </div>
+                        <div class="slide">
+                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAz8fG7gAAAABJRU5ErkJggg==" alt="Exciting Mid-Semester Boost with Lexi Toys" loading="lazy">
+                            <div class="text-overlay">
+                                <h3 class="text-base font-semibold"><strong>Exciting Mid-Semester Boost</strong></h3>
+                                <p>Trainers lead a lively game with vibrant kits!</p>
+                                <span class="expandable">More details...</span>
+                            </div>
+                        </div>
+                        <div class="slide">
+                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAz8fG7gAAAABJRU5ErkJggg==" alt="Delightful End-of-Semester Celebration with Lexi Toys" loading="lazy">
+                            <div class="text-overlay">
+                                <h3 class="text-base font-semibold"><strong>Delightful End-of-Semester Celebration</strong></h3>
+                                <p>Trainers host a festive game with beaming kids!</p>
+                                <span class="expandable">More details...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slideshow-buttons">
+                        <button id="prevSlide">Previous</button>
+                        <button id="nextSlide">Next</button>
+                    </div>
+                    <p class="mt-2 text-xs">These 13 cheerful visits per semester power Lexi Toys’ mission—explore the Financial Planner tab!</p>
+                </div>
+            </div>
+        </div>
+        <!-- Financial Planner Section -->
+        <div id="plannerContent" class="mb-6">
+            <div class="card">
+                <div class="prose prose-base text-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Financial Planner</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg shadow-inner">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Initial Groups</label>
+                            <input type="range" id="initialGroups" min="4" max="30" step="1" value="10" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="initialGroupsValue" class="text-xs text-gray-600">10</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Growth Ratio (%)</label>
+                            <input type="range" id="growthRatio" min="0" max="200" step="5" value="35" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="growthValue" class="text-xs text-gray-600">35%</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Toy Cost (CNY)</label>
+                            <input type="range" id="toyCost" min="10" max="50" step="1" value="20" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="toyValue" class="text-xs text-gray-600">20 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Subscription Fee (CNY)</label>
+                            <input type="range" id="subscriptionFee" min="500" max="2000" step="1" value="688" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="feeValue" class="text-xs text-gray-600">688 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Assistant Salary (CNY/mo)</label>
+                            <input type="range" id="assistantSalary" min="0" max="10000" step="500" value="3500" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="salaryValue" class="text-xs text-gray-600">3500 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Office Rent (CNY/mo)</label>
+                            <input type="range" id="officeRent" min="2500" max="15000" step="500" value="2500" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="rentValue" class="text-xs text-gray-600">2500 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Monthly Spending (CNY)</label>
+                            <input type="range" id="monthlySpending" min="1000" max="5000" step="100" value="2000" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="spendingValue" class="text-xs text-gray-600">2000 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">School Share (%)</label>
+                            <input type="range" id="schoolShare" min="0" max="30" step="1" value="9" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="schoolShareValue" class="text-xs text-gray-600">9%</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Trainer Cost Per Hour (CNY)</label>
+                            <input type="range" id="trainerCost" min="200" max="400" step="10" value="300" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="trainerValue" class="text-xs text-gray-600">300 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Marketing Manager Salary (CNY/mo)</label>
+                            <input type="range" id="marketingSalary" min="0" max="10000" step="500" value="5000" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="marketingSalaryValue" class="text-xs text-gray-600">5000 CNY</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Marketing Manager Cut (%)</label>
+                            <input type="range" id="marketingCut" min="0" max="10" step="1" value="5" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="marketingCutValue" class="text-xs text-gray-600">5%</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Visits Per Semester</label>
+                            <input type="range" id="visits" min="10" max="20" step="1" value="13" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="visitsValue" class="text-xs text-gray-600">13</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Kids Per Group</label>
+                            <input type="range" id="kidsPerGroup" min="30" max="100" step="5" value="30" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="kidsValue" class="text-xs text-gray-600">30</span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Activity Length (min)</label>
+                            <input type="range" id="activityLength" min="20" max="60" step="5" value="25" class="w-full h-2 bg-gray-200 accent-teal-600 rounded-lg cursor-pointer">
+                            <span id="activityValue" class="text-xs text-gray-600">25 min</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar mt-4">
+                        <div class="progress" style="width: 50%"></div> <!-- Placeholder, update dynamically -->
+                    </div>
+                    <div class="financial-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="pinned-semester">Semester</th>
+                                    <th class="pinned-groups">Groups</th>
+                                    <th>Kids</th>
+                                    <th>Gross Income</th>
+                                    <th>Toys Cost</th>
+                                    <th>Trainer Fee</th>
+                                    <th>Assistant Cost</th>
+                                    <th>Rent + Expenses</th>
+                                    <th>Marketing Manager</th>
+                                    <th>Marketing Manager Cut</th>
+                                    <th>School Share</th>
+                                    <th>Total Spending</th>
+                                    <th>Net Profit</th>
+                                    <th>ROI (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="financialTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Invitation to Partnership Section -->
+        <div id="pitchContent" class="mb-6" data-chinese='<div class="card"><div class="prose prose-base text-gray-700"><h2 class="text-xl font-semibold text-gray-800 mb-4">Invitation to Partnership</h2><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">An Opportunity for a profitable investment</h3><p class="mb-2">I’m excited to invite you to explore Lexi Toys, a new venture delivering educational toy kits to schools, planning to start with 10 groups (300 kids) in Semester 1 (2026) and aiming to grow to 76 groups (2,280 kids) by Semester 6 (2028). With the subscription plan based per child per semester, covering 13 visits and with toys at an estimated factory price of 20 CNY each ( market price could be much higher ).</p><p class="mb-2">This model integrates seamlessly with Lexi’s school curricula, using efficient staffing (assistants per 40 groups, a marketing manager when groups reaching over 40 ) to keep costs low and ensure steady growth.</p><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Financial Outlook</h3><p class="mb-2">With a 35% growth rate per semester, we project a cumulative profit of 1421914 CNY by Semester 7 (2029), with milestones like 189812 CNY by Semester 3 (2027). The Financial Planner tab lets you adjust these figures to see the potential.</p><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Let’s Collaborate</h3><p class="mb-2">Lexi Toys is a chance to support a fun, educational initiative. Your partnership could help us scale, and I’d love to discuss how we can make this a successful journey together. Check the Classroom Visits and Funding Support tabs for more details!</p><p class="text-right mt-2">Best Regards,<br>Your Friend</p></div></div>'>
+            <div class="card">
+                <div class="prose prose-base text-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Invitation to Partnership</h2>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">An Opportunity for a profitable investment</h3>
+                    <p class="mb-2">I’m excited to invite you to explore Lexi Toys, a new venture delivering educational toy kits to schools, planning to start with 10 groups (300 kids) in Semester 1 (2026) and aiming to grow to 76 groups (2,280 kids) by Semester 6 (2028). With the subscription plan based per child per semester, covering 13 visits and with toys at an estimated factory price of 20 CNY each ( market price could be much higher ).</p>
+                    <p class="mb-2">This model integrates seamlessly with Lexi’s school curricula, using efficient staffing (assistants per 40 groups, a marketing manager when groups reaching over 40 ) to keep costs low and ensure steady growth.</p>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Financial Outlook</h3>
+                    <p class="mb-2">With a 35% growth rate per semester, we project a cumulative profit of 1,421,914 CNY by Semester 7 (2029), with milestones like 189,812 CNY by Semester 3 (2027). The Financial Planner tab lets you adjust these figures to see the potential.</p>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Let’s Collaborate</h3>
+                    <p class="mb-2">Lexi Toys is a chance to support a fun, educational initiative. Your partnership could help us scale, and I’d love to discuss how we can make this a successful journey together. Check the Classroom Visits and Funding Support tabs for more details!</p>
+                    <p class="text-right mt-2">Best Regards,<br>Your Friend</p>
+                </div>
+            </div>
+        </div>
+        <!-- Funding Support Section -->
+        <div id="loanContent" class="mb-6" data-chinese='<div class="card"><div class="prose prose-base text-gray-700"><h2 class="text-xl font-semibold text-gray-800 mb-4">Funding Support</h2><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Funding Amount</h3><p class="mb-2">We are seeking 300,000 CNY to launch Lexi Toys by September 1st or October 1st, 2025, covering initial costs for 10 groups (300 kids), including:</p><ul class="list-disc list-inside mb-2"><li>Toy Inventory: 78000 CNY (300 kids, 13 visits at 20 CNY each).</li><li>Staffing: 21000 CNY (one assistant at 3,500 CNY/month for 6 months), plus trainer fees.</li><li>Office Rent & Expenses: 27500 CNY (2,500 CNY/month + 2,000 CNY spending for 6 months).</li><li>Marketing & Setup: 173500 CNY (outreach, kit design).</li></ul><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Purpose</h3><p class="mb-2">This funding will support initial operations until subscriptions (1032000 CNY in Semester 4) generate proper revenue, allowing us to scale to 2,280 kids by Semester 6 with a projected net profit.</p><h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Repayment Plan</h3><p class="mb-2">With an expected net profit of 189812 CNY by Semester 3 (2027) and a cumulative profit of 1421914 CNY by Semester 7 (2029), we plan to repay the 300,000 CNY over 24 months by mid-2029, with negotiable interest rates (e.g., 5–7%). Use the Financial Planner tab to explore scenarios.</p><p class="mb-2">Your support can help Lexi Toys grow at a steady pace—let’s discuss how we can work together!</p></div></div>'>
+            <div class="card">
+                <div class="prose prose-base text-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Funding Support</h2>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Funding Amount</h3>
+                    <p class="mb-2">We are seeking 300,000 CNY to launch Lexi Toys by September 1st or October 1st, 2025, covering initial costs for 10 groups (300 kids), including:</p>
+                    <ul class="list-disc list-inside mb-2">
+                        <li>Toy Inventory: 78,000 CNY (300 kids, 13 visits at 20 CNY each).</li>
+                        <li>Staffing: 21,000 CNY (one assistant at 3,500 CNY/month for 6 months), plus trainer fees.</li>
+                        <li>Office Rent & Expenses: 27,500 CNY (2,500 CNY/month + 2,000 CNY spending for 6 months).</li>
+                        <li>Marketing & Setup: 173,500 CNY (outreach, kit design).</li>
+                    </ul>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Purpose</h3>
+                    <p class="mb-2">This funding will support initial operations until subscriptions (1,032,000 CNY in Semester 4) generate proper revenue, allowing us to scale to 2,280 kids by Semester 6 with a projected net profit.</p>
+                    <h3 class="text-base font-semibold text-gray-700 mt-4 mb-2">Repayment Plan</h3>
+                    <p class="mb-2">With an expected net profit of 189,812 CNY by Semester 3 (2027) and a cumulative profit of 1,421,914 CNY by Semester 7 (2029), we plan to repay the 300,000 CNY over 24 months by mid-2029, with negotiable interest rates (e.g., 5–7%). Use the Financial Planner tab to explore scenarios.</p>
+                    <p class="mb-2">Your support can help Lexi Toys grow at a steady pace—let’s discuss how we can work together!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Initialize parameters
+        let params = {
+            initialGroups: 10,
+            growthRatio: 35,
+            toyCost: 20,
+            subscriptionFee: 688,
+            assistantSalary: 3500,
+            officeRent: 2500,
+            monthlySpending: 2000,
+            schoolShare: 9,
+            trainerCostPerHour: 300,
+            marketingManagerSalary: 5000,
+            marketingManagerCut: 5,
+            visitsPerSemester: 13,
+            kidsPerGroup: 30,
+            activityLength: 25
+        };
+
+        let isChinese = false;
+
+        // Language toggle
+        document.getElementById('langToggle').addEventListener('click', () => {
+            isChinese = !isChinese;
+            const langToggle = document.getElementById('langToggle');
+            langToggle.textContent = isChinese ? 'Switch to English' : 'Switch to Chinese';
+            ['introContent', 'pitchContent', 'loanContent'].forEach(id => { // Exclude classroomContent
+                const content = document.getElementById(id);
+                if (content) {
+                    const prose = content.querySelector('.prose');
+                    const chineseContent = content.getAttribute('data-chinese');
+                    if (prose && chineseContent) {
+                        if (isChinese) {
+                            prose.innerHTML = chineseContent.match(/<div[^>]*>([\s\S]*?)<\/div>/)[1];
+                        } else {
+                            prose.innerHTML = content.querySelector('.prose').innerHTML;
+                        }
+                    }
+                }
+            });
+            if (document.getElementById('classroomContent') && !document.getElementById('classroomContent').classList.contains('hidden')) {
+                let slideIndex = 0;
+                showSlides(slideIndex);
+            }
+        });
+
+        // Tab navigation
+        const introTab = document.getElementById('introTab');
+        const classroomTab = document.getElementById('classroomTab');
+        const plannerTab = document.getElementById('plannerTab');
+        const pitchTab = document.getElementById('pitchTab');
+        const loanTab = document.getElementById('loanTab');
+        const introContent = document.getElementById('introContent');
+        const classroomContent = document.getElementById('classroomContent');
+        const plannerContent = document.getElementById('plannerContent');
+        const pitchContent = document.getElementById('pitchContent');
+        const loanContent = document.getElementById('loanContent');
+
+        function showTab(activeTab, activeContent) {
+            [introTab, classroomTab, plannerTab, pitchTab, loanTab].forEach(tab => {
+                tab.classList.remove('tab-active');
+                tab.classList.add('tab-active:bg-transparent');
+            });
+            [introContent, classroomContent, plannerContent, pitchContent, loanContent].forEach(content => 
+                content.classList.add('hidden'));
+            activeTab.classList.add('tab-active');
+            activeContent.classList.remove('hidden');
+            if (activeTab === plannerTab) updateTable();
+            if (activeTab === classroomTab) {
+                let slideIndex = 0;
+                showSlides(slideIndex);
+            }
+        }
+
+        introTab.addEventListener('click', () => showTab(introTab, introContent));
+        classroomTab.addEventListener('click', () => showTab(classroomTab, classroomContent));
+        plannerTab.addEventListener('click', () => showTab(plannerTab, plannerContent));
+        pitchTab.addEventListener('click', () => showTab(pitchTab, pitchContent));
+        loanTab.addEventListener('click', () => showTab(loanTab, loanContent));
+        showTab(introTab, introContent);
+
+        // Update slider values display
+        function updateSliderValues() {
+            document.getElementById('initialGroupsValue').textContent = `${params.initialGroups}`;
+            document.getElementById('growthValue').textContent = `${params.growthRatio}%`;
+            document.getElementById('toyValue').textContent = `${params.toyCost} CNY`;
+            document.getElementById('feeValue').textContent = `${params.subscriptionFee} CNY`;
+            document.getElementById('salaryValue').textContent = `${params.assistantSalary} CNY`;
+            document.getElementById('rentValue').textContent = `${params.officeRent} CNY`;
+            document.getElementById('spendingValue').textContent = `${params.monthlySpending} CNY`;
+            document.getElementById('schoolShareValue').textContent = `${params.schoolShare}%`;
+            document.getElementById('trainerValue').textContent = `${params.trainerCostPerHour} CNY`;
+            document.getElementById('marketingSalaryValue').textContent = `${params.marketingManagerSalary} CNY`;
+            document.getElementById('marketingCutValue').textContent = `${params.marketingManagerCut}%`;
+            document.getElementById('visitsValue').textContent = `${params.visitsPerSemester}`;
+            document.getElementById('kidsValue').textContent = `${params.kidsPerGroup}`;
+            document.getElementById('activityValue').textContent = `${params.activityLength} min`;
+        }
+
+        // Calculate financial projections
+        function calculateProjections() {
+            let groups = params.initialGroups;
+            let marketingHireGroups = null;
+            let results = [];
+            for (let semester = 1; semester <= 7; semester++) {
+                groups = Math.ceil(groups);
+                let kids = Math.round(groups * params.kidsPerGroup);
+                let grossIncome = Math.round(kids * params.subscriptionFee);
+                let toysCost = Math.round(groups * params.kidsPerGroup * params.visitsPerSemester * params.toyCost);
+                let trainerFee = Math.round(groups * params.visitsPerSemester * (params.trainerCostPerHour * params.activityLength / 60));
+                let assistantCost = Math.round(Math.ceil(groups / 40) * (params.assistantSalary * 6));
+                let rentExpenses = Math.round((params.officeRent + params.monthlySpending) * 6);
+                
+                let marketingManager = 0;
+                let marketingManagerCut = 0;
+                if (groups >= 40 && marketingHireGroups === null) {
+                    marketingHireGroups = 40;
+                }
+                if (marketingHireGroups !== null) {
+                    marketingManager = Math.round(params.marketingManagerSalary * 6);
+                    let commissionGroups = Math.max(0, groups - marketingHireGroups);
+                    let commissionKids = commissionGroups * params.kidsPerGroup;
+                    let commissionIncome = commissionKids * params.subscriptionFee;
+                    let commissionToysCost = commissionGroups * params.kidsPerGroup * params.visitsPerSemester * params.toyCost;
+                    let commissionTrainerFee = commissionGroups * params.visitsPerSemester * (params.trainerCostPerHour * params.activityLength / 60);
+                    let commissionSchoolShare = (params.schoolShare / 100) * commissionIncome;
+                    let commissionNetProfit = commissionIncome - (commissionToysCost + commissionTrainerFee + commissionSchoolShare);
+                    marketingManagerCut = Math.round((params.marketingManagerCut / 100) * commissionNetProfit);
+                }
+
+                let schoolShare = Math.round((params.schoolShare / 100) * grossIncome);
+                let totalCostsExclMarketingCut = toysCost + trainerFee + assistantCost + rentExpenses + marketingManager + schoolShare;
+                let totalSpending = Math.round(totalCostsExclMarketingCut + marketingManagerCut);
+                let netProfit = Math.round(grossIncome - totalSpending);
+                let roi = totalSpending > 0 ? (netProfit / totalSpending) * 100 : 0;
+
+                let year = 2025 + Math.ceil(semester / 2);
+                let semesterName = `S${semester} (${year})`;
+
+                results.push({
+                    Semester: semesterName,
+                    Groups: groups,
+                    Kids: kids,
+                    'Gross Income': grossIncome,
+                    'Toys Cost': toysCost,
+                    'Trainer Fee': trainerFee,
+                    'Assistant Cost': assistantCost,
+                    'Rent + Expenses': rentExpenses,
+                    'Marketing Manager': marketingManager,
+                    'Marketing Manager Cut': marketingManagerCut,
+                    'School Share': schoolShare,
+                    'Total Spending': totalSpending,
+                    'Net Profit': netProfit,
+                    'ROI (%)': roi.toFixed(2)
+                });
+
+                groups *= (1 + params.growthRatio / 100);
+            }
+            // Update progress bar based on max Net Profit
+            const maxProfit = Math.max(...results.map(r => r['Net Profit']));
+            document.querySelector('.progress').style.width = `${(results[results.length - 1]['Net Profit'] / maxProfit) * 100}%`;
+
+            return results;
+        }
+
+        // Update table
+        function updateTable() {
+            const projections = calculateProjections();
+            const tbody = document.getElementById('financialTableBody');
+            tbody.innerHTML = '';
+            projections.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="pinned-semester">${row.Semester}</td>
+                    <td class="pinned-groups">${row.Groups}</td>
+                    <td>${row.Kids}</td>
+                    <td>${row['Gross Income']}</td>
+                    <td>${row['Toys Cost']}</td>
+                    <td>${row['Trainer Fee']}</td>
+                    <td>${row['Assistant Cost']}</td>
+                    <td>${row['Rent + Expenses']}</td>
+                    <td>${row['Marketing Manager']}</td>
+                    <td>${row['Marketing Manager Cut']}</td>
+                    <td>${row['School Share']}</td>
+                    <td>${row['Total Spending']}</td>
+                    <td>${row['Net Profit']}</td>
+                    <td>${row['ROI (%)']}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Event listeners for sliders
+        document.getElementById('initialGroups').addEventListener('input', (e) => {
+            params.initialGroups = parseInt(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('growthRatio').addEventListener('input', (e) => {
+            params.growthRatio = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('toyCost').addEventListener('input', (e) => {
+            params.toyCost = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('subscriptionFee').addEventListener('input', (e) => {
+            params.subscriptionFee = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('assistantSalary').addEventListener('input', (e) => {
+            params.assistantSalary = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('officeRent').addEventListener('input', (e) => {
+            params.officeRent = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('monthlySpending').addEventListener('input', (e) => {
+            params.monthlySpending = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('schoolShare').addEventListener('input', (e) => {
+            params.schoolShare = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('trainerCost').addEventListener('input', (e) => {
+            params.trainerCostPerHour = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('marketingSalary').addEventListener('input', (e) => {
+            params.marketingManagerSalary = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('marketingCut').addEventListener('input', (e) => {
+            params.marketingManagerCut = parseFloat(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('visits').addEventListener('input', (e) => {
+            params.visitsPerSemester = parseInt(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('kidsPerGroup').addEventListener('input', (e) => {
+            params.kidsPerGroup = parseInt(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+        document.getElementById('activityLength').addEventListener('input', (e) => {
+            params.activityLength = parseInt(e.target.value);
+            updateSliderValues();
+            updateTable();
+        });
+
+        // Slideshow functionality
+        let slideIndex = 0;
+        function showSlides(n) {
+            const slides = document.getElementsByClassName('slide');
+            if (n >= slides.length) slideIndex = 0;
+            if (n < 0) slideIndex = slides.length - 1;
+            for (let i = 0; i < slides.length; i++) {
+                slides[i].style.transform = `translateX(-${slideIndex * 100}%)`;
+            }
+        }
+        document.getElementById('prevSlide').addEventListener('click', () => {
+            showSlides(slideIndex -= 1);
+        });
+        document.getElementById('nextSlide').addEventListener('click', () => {
+            showSlides(slideIndex += 1);
+        });
+
+        // Initial load
+        updateSliderValues();
+        updateTable();
+
+        // Expandable details
+        document.querySelectorAll('.expandable').forEach(item => {
+            item.addEventListener('click', () => {
+                const details = item.nextElementSibling || item.parentElement.querySelector('p:nth-child(2)');
+                if (details.style.display === 'block') {
+                    details.style.display = 'none';
+                } else {
+                    details.style.display = 'block';
+                }
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            updateTable();
+        });
+    </script>
+</body>
+</html>
